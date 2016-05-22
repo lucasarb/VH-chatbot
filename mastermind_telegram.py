@@ -1,7 +1,7 @@
 import sys
 import traceback
 
-#Import url haddling
+#Import url handling for the Mastermind API
 import urllib2
 import urllib
 import json
@@ -12,8 +12,9 @@ from telepot.delegate import per_chat_id, create_open
 from telepot.routing import by_chat_command
 
 
-
+# A player class. Serves as a instance of the game
 class Player(telepot.helper.ChatHandler):
+	#When a new instance of the class is generated it creates all the variables for this game instance
 	def __init__(self, seed_tuple, timeout):
 		super(Player,self).__init__(seed_tuple,timeout)
 
@@ -27,10 +28,33 @@ class Player(telepot.helper.ChatHandler):
 		self._past_results = []
 		self._result = []
 		self._solved = "false"
+		self._past_guesses = dict()
 
+	# Gives the best hint after the player types /hint
 	def _hint(self):
 		#TODO HINT MODULE TO GIVE THE BEST GUESS OF MASTERMIND
-		self.sender.sendMessage('Hint features not yet available')
+		#Hint function not working
+		
+		if (len(self._past_guesses) < 2):
+			self.sender.sendMessage('Try one more time guess to compute a guess')
+			return
+
+		largest_fitness = max(self._past_guesses.keys())
+		best_guess = self._past_guesses[max(self._past_guesses.keys())]
+
+		del self._past_guesses[max(self._past_guesses.keys())]
+
+		second_largest_fitness = max(self._past_guesses.keys())
+		second_best_guess = self._past_guesses[max(self._past_guesses.keys())]
+
+		new_guess = best_guess[:4]+second_best_guess[4:]
+
+		self._past_guesses.update({largest_fitness:best_guess})
+
+		self.sender.sendMessage('I recommend you try this combination: %s' % new_guess)
+
+		#self.sender.sendMessage('Hint features not yet available')
+
 		return
 
 	#Function will be activated when the player talks to bot
@@ -80,7 +104,7 @@ class Player(telepot.helper.ChatHandler):
 			""")
 		return
 
-
+	#Whenever the player sends a chat message this method is called
 	def on_chat_message(self, msg):
 		content_type, chat_type, chat_id = telepot.glance(msg)
 
@@ -124,6 +148,11 @@ class Player(telepot.helper.ChatHandler):
 			self._result = game_data['result']
 			self._solved = game_data['solved']
 
+
+			fitness = int(game_data['result']['exact']) * 4 + int(game_data['result']['near']) * 2
+			self._past_guesses.update({fitness:guess})
+			print self._past_guesses
+
 		except ValueError:
 			self.sender.sendMessage('There was an error in the guessing part')
 			return
@@ -135,13 +164,16 @@ class Player(telepot.helper.ChatHandler):
 			self.sender.sendMessage('You got %s colors in the exact place and %s near it' % (self._result['exact'], self._result['near']))
 			self.sender.sendMessage('If you need a hint just type: /hint')
 
+	#When the instance reach a timeout without communication. It closes the instance
 	def on_close(self, exception):
 		if isinstance(exception, telepot.exception.WaitTooLong):
 			self.sender.sendMessage('Game expired')
 
-
+#TOKEN given by telegram for this specific bot.
+# It is not good practice to put the token on the code. But for time purposes the TOKEN is here.
 TOKEN = '228795069:AAEDYFUP96p8SUpDNlcqGSmksKrixKkGmD8'
 
+#This function creates a player class with timeout of 90 seconds for each person that talks to the bot. 
 bot = telepot.DelegatorBot(TOKEN, [(per_chat_id(),create_open(Player, timeout = 90))])
 
 bot.message_loop(run_forever = True)
